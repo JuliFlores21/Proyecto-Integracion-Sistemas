@@ -22,6 +22,9 @@ class RabbitMQConsumer:
 
         # Retrieve all relevant events for Notifications
         # Binding keys: *.<Event> allows catching from any service (Source independent)
+        # Notification Service actúa como "suscriptor" global:
+        # "*.OrderCreated" => recibe el evento sin importar el emisor (topic exchange).
+
         binding_keys = [
             "*.OrderCreated",
             "*.OrderConfirmed",
@@ -50,6 +53,11 @@ class RabbitMQConsumer:
             except Exception as e:
                 print(f" [!] Error processing notification: {e}")
                 # We ack to avoid loop on bad message for notifications (fire and forget mostly)
+                
+                # Diseño intencional:
+                # Notificaciones son "best-effort" / fire-and-forget.
+                # Se hace ACK para evitar loops de reintentos ante payloads inválidos.
+                # En flujos críticos (pagos/inventario), se usaría NACK(requeue=False) + DLQ.
                 ch.basic_ack(delivery_tag=method.delivery_tag)
 
         self.channel.basic_consume(queue=QUEUE_NAME, on_message_callback=callback)
