@@ -196,6 +196,8 @@ services:
       - PAYMENT_SERVICE_URL=http://payment-service:8000
       - NOTIFICATION_SERVICE_URL=http://notification-service:8000
       - JWT_SECRET=${JWT_SECRET:-supersecretkey}
+      - RABBITMQ_USER=${RABBITMQ_USER:-user}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-password}
     networks:
       - integrahub-network
     ports:

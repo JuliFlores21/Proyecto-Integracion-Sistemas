@@ -19,6 +19,16 @@ class OrderRepository(ABC):
         pass
 
     @abstractmethod
+    def list_orders(self) -> list[Order]:
+        """Lista las últimas órdenes"""
+        pass
+
+    @abstractmethod
+    def update_status(self, order_id: str, status: str) -> None:
+        """Actualiza el estado de una orden"""
+        pass
+
+    @abstractmethod
     def exists_idempotency_key(self, key: str) -> bool:
         """Verifica si existe una clave de idempotencia"""
         pass

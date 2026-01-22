@@ -136,6 +136,47 @@ class PostgresOrderRepository(OrderRepository):
                 created_at=db_order.created_at,
             )
 
+    def list_orders(self) -> list[Order]:
+        """Lista las últimas 20 órdenes"""
+        with self._get_session() as session:
+            db_orders = (
+                session.query(OrderModel)
+                .order_by(OrderModel.created_at.desc())
+                .limit(20)
+                .all()
+            )
+            orders = []
+            for db_order in db_orders:
+                items = [
+                    OrderItem(
+                        product_id=item.product_id,
+                        quantity=item.quantity,
+                        price=item.price,
+                    )
+                    for item in db_order.items
+                ]
+                orders.append(
+                    Order(
+                        customer_id=db_order.customer_id,
+                        items=items,
+                        status=OrderStatus(db_order.status),
+                        order_id=db_order.order_id,
+                        created_at=db_order.created_at,
+                    )
+                )
+            return orders
+
+    def update_status(self, order_id: str, status: str) -> None:
+        """Actualiza el estado de una orden"""
+        with self._get_session() as session:
+            db_order = session.query(OrderModel).filter_by(order_id=order_id).first()
+            if db_order:
+                db_order.status = status
+                session.add(db_order)
+                logger.info(f"Estado de orden {order_id} actualizado a {status}")
+            else:
+                logger.warning(f"Intento de actualizar orden inexistente: {order_id}")
+
     def exists_idempotency_key(self, key: str) -> bool:
         """Verifica si existe una clave de idempotencia"""
         with self._get_session() as session:

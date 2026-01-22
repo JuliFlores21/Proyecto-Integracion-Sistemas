@@ -10,9 +10,10 @@ import uvicorn
 
 from shared.infrastructure.config import get_service_config
 from shared.infrastructure.security import verify_token
-from src.application.services import CreateOrderUseCase
+from src.application.services import CreateOrderUseCase, UpdateOrderStatusUseCase
 from src.infrastructure.adapters.postgres_repository import PostgresOrderRepository
 from src.infrastructure.adapters.rabbitmq_publisher import RabbitMQPublisherAdapter
+from src.infrastructure.adapters.rabbitmq_consumer import RabbitMQConsumer
 
 # Configuración de logging
 logging.basicConfig(
@@ -26,20 +27,34 @@ config = get_service_config("order_service", default_port=8000)
 # Componentes de infraestructura (inyección de dependencias manual)
 repository: PostgresOrderRepository = None
 publisher: RabbitMQPublisherAdapter = None
+consumer: RabbitMQConsumer = None
 create_order_use_case: CreateOrderUseCase = None
+update_order_use_case: UpdateOrderStatusUseCase = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gestión del ciclo de vida de la aplicación"""
-    global repository, publisher, create_order_use_case
+    global repository, publisher, consumer, create_order_use_case, update_order_use_case
 
     logger.info("Inicializando Order Service...")
 
     # Inicializar adaptadores
     repository = PostgresOrderRepository(config.database.url)
     publisher = RabbitMQPublisherAdapter(host=config.rabbitmq.host)
+
+    # Inicializar casos de uso
     create_order_use_case = CreateOrderUseCase(repository, publisher)
+    update_order_use_case = UpdateOrderStatusUseCase(repository)
+
+    # Inicializar y arrancar consumer
+    consumer = RabbitMQConsumer(
+        rabbitmq_host=config.rabbitmq.host,
+        rabbitmq_user=config.rabbitmq.user,
+        rabbitmq_pass=config.rabbitmq.password,
+        update_order_use_case=update_order_use_case,
+    )
+    consumer.start()
 
     logger.info("Order Service inicializado correctamente")
     yield
@@ -55,6 +70,22 @@ app = FastAPI(
     description="Microservicio de gestión de órdenes - Arquitectura Hexagonal",
     lifespan=lifespan,
 )
+
+
+@app.get("/orders", response_model=List[dict])
+def list_orders():
+    """Listar órdenes recientes (CQRS simplificado)"""
+    orders = repository.list_orders()
+    return [
+        {
+            "order_id": o.order_id,
+            "status": o.status.value,
+            "total_amount": o.total_amount,
+            "created_at": o.created_at,
+            "customer_id": o.customer_id,
+        }
+        for o in orders
+    ]
 
 
 # DTOs con validación mejorada

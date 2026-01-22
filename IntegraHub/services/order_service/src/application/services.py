@@ -82,3 +82,21 @@ class CreateOrderUseCase:
                 order.status.value if hasattr(order.status, "value") else order.status
             ),
         }
+
+
+class UpdateOrderStatusUseCase:
+    """Caso de uso para actualizar el estado de una orden"""
+
+    def __init__(self, repository: OrderRepository):
+        self._repository = repository
+
+    def execute(self, order_id: str, new_status: str) -> None:
+        """
+        Actualiza el estado de una orden.
+
+        Args:
+            order_id: ID de la orden
+            new_status: Nuevo estado
+        """
+        logger.info(f"Actualizando estado de orden {order_id} a {new_status}")
+        self._repository.update_status(order_id, new_status)
