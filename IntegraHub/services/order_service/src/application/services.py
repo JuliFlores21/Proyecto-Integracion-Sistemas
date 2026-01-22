@@ -29,9 +29,7 @@ class CreateOrderUseCase:
             "status": saved_order.status
         }
         
-        # The prompt mentioned "Retry with Backoff for communication with payment service".
-        # Since the flow is API -> Event -> ..., the 'communication' is effectively publishing the event 
-        # that the Payment Service will eventually consume.
+        
         self.publisher.publish("orders", "OrderCreated", event_payload)
         
         return saved_order

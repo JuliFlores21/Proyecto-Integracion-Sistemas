@@ -89,7 +89,7 @@ class PostgresOrderRepository(OrderRepository):
         )
         order.total_amount = db_order.total_amount
         return order
-
+    #Verify idempotency key existence
     def exists_idempotency_key(self, key: str) -> bool:
         session = self.Session()
         try:
@@ -105,7 +105,7 @@ class PostgresOrderRepository(OrderRepository):
             session.commit()
         finally:
             session.close()
-
+    # Update order status
     def update_status(self, order_id: str, status: str):
         session = self.Session()
         try:

@@ -10,13 +10,13 @@ class ProductModel(Base):
     __tablename__ = "products"
     product_id = Column(String, primary_key=True)
     stock = Column(Integer)
-
+    # Additional fields can be added as needed
 class ProcessedOrderModel(Base):
     __tablename__ = "processed_orders_inventory"
     order_id = Column(String, primary_key=True)
     status = Column(String)
     processed_at = Column(DateTime, default=datetime.utcnow)
-
+# Inventory Repository Implementation
 class PostgresInventoryRepository(InventoryRepository):
     def __init__(self, db_url: str):
         self.engine = create_engine(db_url)
