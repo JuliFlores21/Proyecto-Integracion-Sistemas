@@ -35,3 +35,10 @@ class CreateOrderUseCase:
         self.publisher.publish("orders", "OrderCreated", event_payload)
         
         return saved_order
+
+class UpdateOrderStatusUseCase:
+    def __init__(self, repository: OrderRepository):
+        self.repository = repository
+
+    def execute(self, order_id: str, status: str):
+        self.repository.update_status(order_id, status)

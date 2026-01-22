@@ -32,11 +32,27 @@ class HttpOrderAdapter(BaseHttpClient, OrderServicePort):
         return response["order_id"]
 
     def get_orders(self) -> List[DemoOrder]:
-        # Mocking local para garantizar funcionalidad visual si el back no tiene GET
-        return [
-            DemoOrder("ord-123", "CREATED", 100.50, "corr-abc-1"),
-            DemoOrder("ord-124", "CONFIRMED", 250.00, "corr-abc-2")
-        ]
+        try:
+            # Call the real endpoint
+            # Note: _get() in BaseHttpClient currently doesn't support headers, 
+            # but the GET /orders currently doesn't enforce Auth (it should, but for demo it's open).
+            orders_data = self._get("orders")
+            
+            if not orders_data:
+                return []
+                
+            return [
+                DemoOrder(
+                    order_id=str(o.get("order_id")),
+                    status=str(o.get("status")),
+                    total=float(o.get("total_amount", 0.0)),
+                    correlation_id="N/A" # Not returned by simple API yet
+                )
+                for o in orders_data
+            ]
+        except Exception:
+            # Fallback to empty list or logs
+            return []
 
 class HttpHealthAdapter(SystemStatusPort):
     def check_health(self) -> List[SystemHealth]:

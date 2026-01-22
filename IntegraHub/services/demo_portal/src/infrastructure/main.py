@@ -43,8 +43,8 @@ async def create_demo_order(request: Request):
     try:
         # Datos de prueba para el flujo
         sample_items = [
-            {"product_id": "prod-001", "quantity": 1, "price": 50.0},
-            {"product_id": "prod-002", "quantity": 2, "price": 25.0}
+            {"product_id": "prod_1", "quantity": 1, "price": 50.0},
+            {"product_id": "prod_2", "quantity": 2, "price": 25.0}
         ]
         
         order_id = order_adapter.create_demo_order("customer-demo", sample_items)

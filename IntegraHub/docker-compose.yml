@@ -80,6 +80,7 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - DB_HOST=postgres
       - DB_NAME=${DB_NAME:-integrahub_db}
+      - PYTHONUNBUFFERED=1
     networks:
       - integrahub-network
 
@@ -95,6 +96,7 @@ services:
         condition: service_healthy
     environment:
       - RABBITMQ_HOST=rabbitmq
+      - PYTHONUNBUFFERED=1
     networks:
       - integrahub-network
 
@@ -110,6 +112,7 @@ services:
         condition: service_healthy
     environment:
       - RABBITMQ_HOST=rabbitmq
+      - PYTHONUNBUFFERED=1
     networks:
       - integrahub-network
 

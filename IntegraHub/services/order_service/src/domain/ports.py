@@ -10,6 +10,10 @@ class OrderRepository(ABC):
     @abstractmethod
     def get_by_id(self, order_id: str) -> Optional[Order]:
         pass
+
+    @abstractmethod
+    def get_all(self) -> list[Order]:
+        pass
     
     @abstractmethod
     def exists_idempotency_key(self, key: str) -> bool:
@@ -17,6 +21,10 @@ class OrderRepository(ABC):
     
     @abstractmethod
     def save_idempotency_key(self, key: str, order_id: str):
+        pass
+
+    @abstractmethod
+    def update_status(self, order_id: str, status: str):
         pass
 
 class EventPublisher(ABC):

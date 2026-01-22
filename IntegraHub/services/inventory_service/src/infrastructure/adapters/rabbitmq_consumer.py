@@ -41,7 +41,8 @@ class RabbitMQConsumer:
         self.channel.queue_declare(queue=MAIN_QUEUE, durable=True, arguments=args)
         
         # 3. Bind OrderCreated events
-        self.channel.queue_bind(exchange=MAIN_EXCHANGE, queue=MAIN_QUEUE, routing_key="orders.OrderCreated")
+        # Correction: Use wildcard to match any producer (order.OrderCreated, orders.OrderCreated, etc)
+        self.channel.queue_bind(exchange=MAIN_EXCHANGE, queue=MAIN_QUEUE, routing_key="*.OrderCreated")
 
         # Set QoS
         self.channel.basic_qos(prefetch_count=1)

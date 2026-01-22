@@ -62,8 +62,33 @@ class PostgresOrderRepository(OrderRepository):
             session.close()
 
     def get_by_id(self, order_id: str) -> Optional[Order]:
-        # Implementation omitted for brevity
-        pass
+        session = self.Session()
+        try:
+            db_order = session.query(OrderModel).filter_by(order_id=order_id).first()
+            if not db_order:
+                return None
+            return self._map(db_order)
+        finally:
+            session.close()
+
+    def get_all(self) -> list[Order]:
+        session = self.Session()
+        try:
+            db_orders = session.query(OrderModel).order_by(OrderModel.created_at.desc()).limit(50).all()
+            return [self._map(o) for o in db_orders]
+        finally:
+            session.close()
+
+    def _map(self, db_order):
+        order = Order(
+            order_id=db_order.order_id,
+            customer_id=db_order.customer_id,
+            status=db_order.status,
+            created_at=db_order.created_at,
+            items=[OrderItem(product_id=i.product_id, quantity=i.quantity, price=i.price) for i in db_order.items]
+        )
+        order.total_amount = db_order.total_amount
+        return order
 
     def exists_idempotency_key(self, key: str) -> bool:
         session = self.Session()
@@ -78,5 +103,18 @@ class PostgresOrderRepository(OrderRepository):
             entry = IdempotencyModel(key=key, order_id=order_id)
             session.add(entry)
             session.commit()
+        finally:
+            session.close()
+
+    def update_status(self, order_id: str, status: str):
+        session = self.Session()
+        try:
+            order = session.query(OrderModel).filter_by(order_id=order_id).first()
+            if order:
+                order.status = status
+                session.commit()
+        except Exception as e:
+            session.rollback()
+            raise e
         finally:
             session.close()
