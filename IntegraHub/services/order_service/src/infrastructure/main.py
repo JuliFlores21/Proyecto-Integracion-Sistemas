@@ -1,3 +1,14 @@
+# HTTP API (FastAPI) - Order Service
+# Este archivo actúa como "composition root":
+# - Construye adaptadores (Postgres repo, RabbitMQ publisher)
+# - Inyecta dependencias a los casos de uso (application layer)
+# - Expone endpoints REST
+ 
+# Seguridad:
+# - verify_token valida JWT (shared.infrastructure.security)
+# - /orders requiere token y permite idempotencia via header X-Idempotency-Key
+ 
+
 from fastapi import FastAPI, HTTPException, Header, Depends, status
 import uvicorn
 from pydantic import BaseModel
@@ -10,7 +21,10 @@ from src.infrastructure.adapters.postgres_repository import PostgresOrderReposit
 from src.infrastructure.adapters.rabbitmq_publisher import RabbitMQPublisherAdapter
 from src.infrastructure.adapters.rabbitmq_consumer import RabbitMQConsumer
 
-# Config
+# Config:
+# DB_HOST / RABBITMQ_HOST se leen de env (docker-compose).
+# Nota: DATABASE_URL y AMQP_URL usan user:password fijos (demo).
+
 DB_HOST = os.getenv("DB_HOST", "localhost")
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
 DATABASE_URL = f"postgresql://user:password@{DB_HOST}:5432/integrahub_db"
@@ -19,12 +33,14 @@ AMQP_URL = f"amqp://user:password@{RABBITMQ_HOST}:5672/%2f"
 # App
 app = FastAPI(title="Order Service", version="1.0.0")
 
-# Dependencies (Manual DI for Hexagonal Arch)
+# Dependencies (Manual DI):
+# Se hace DI manual para mantener simpleza y evidenciar arquitectura hexagonal.
 repository = PostgresOrderRepository(DATABASE_URL)
 publisher = RabbitMQPublisherAdapter(host=RABBITMQ_HOST)
 create_order_use_case = CreateOrderUseCase(repository, publisher)
 
-# Background Consumer
+# Background Consumer:
+# El servicio consume eventos de estado para sincronizar orders con resultados de payment/inventory.
 consumer = RabbitMQConsumer(AMQP_URL, repository)
 
 @app.on_event("startup")
@@ -54,6 +70,11 @@ def create_order(
     idempotency_key: str = Header(None, alias="X-Idempotency-Key"),
     user_payload: dict = Depends(verify_token)
 ):
+# Flujo:
+    # 1) DTO (Pydantic) -> datos planos
+    # 2) Use Case (CreateOrderUseCase) crea y persiste orden
+    # 3) Publica evento OrderCreated a RabbitMQ (integración)
+    # 4) Responde 201 con order_id
     try:
         # Pass DTO data to application layer
         order = create_order_use_case.execute(
