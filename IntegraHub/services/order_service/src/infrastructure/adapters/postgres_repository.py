@@ -1,0 +1,82 @@
+from sqlalchemy import create_engine, Column, String, Float, Integer, ForeignKey, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship
+from typing import Optional
+from ...domain.models import Order, OrderItem
+from ...domain.ports import OrderRepository
+import os
+
+Base = declarative_base()
+
+class OrderModel(Base):
+    __tablename__ = "orders"
+    order_id = Column(String, primary_key=True)
+    customer_id = Column(String)
+    status = Column(String)
+    total_amount = Column(Float)
+    created_at = Column(DateTime)
+    items = relationship("OrderItemModel", back_populates="order")
+
+class OrderItemModel(Base):
+    __tablename__ = "order_items"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    order_id = Column(String, ForeignKey("orders.order_id"))
+    product_id = Column(String)
+    quantity = Column(Integer)
+    price = Column(Float)
+    order = relationship("OrderModel", back_populates="items")
+
+class IdempotencyModel(Base):
+    __tablename__ = "idempotency_keys"
+    key = Column(String, primary_key=True)
+    order_id = Column(String)
+
+class PostgresOrderRepository(OrderRepository):
+    def __init__(self, db_url: str):
+        self.engine = create_engine(db_url)
+        Base.metadata.create_all(self.engine)
+        self.Session = sessionmaker(bind=self.engine)
+
+    def save(self, order: Order) -> Order:
+        session = self.Session()
+        try:
+            db_order = OrderModel(
+                order_id=order.order_id,
+                customer_id=order.customer_id,
+                status=order.status,
+                total_amount=order.total_amount,
+                created_at=order.created_at
+            )
+            for item in order.items:
+                db_item = OrderItemModel(
+                    product_id=item.product_id,
+                    quantity=item.quantity,
+                    price=item.price
+                )
+                db_order.items.append(db_item)
+            
+            session.add(db_order)
+            session.commit()
+            return order
+        finally:
+            session.close()
+
+    def get_by_id(self, order_id: str) -> Optional[Order]:
+        # Implementation omitted for brevity
+        pass
+
+    def exists_idempotency_key(self, key: str) -> bool:
+        session = self.Session()
+        try:
+            return session.query(IdempotencyModel).filter_by(key=key).first() is not None
+        finally:
+            session.close()
+
+    def save_idempotency_key(self, key: str, order_id: str):
+        session = self.Session()
+        try:
+            entry = IdempotencyModel(key=key, order_id=order_id)
+            session.add(entry)
+            session.commit()
+        finally:
+            session.close()

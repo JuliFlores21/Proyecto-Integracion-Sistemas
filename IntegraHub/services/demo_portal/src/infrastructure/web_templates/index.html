@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>IntegraHub Demo Portal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f4f4f9; color: #333; margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        h2 { margin-top: 30px; color: #34495e; }
+        
+        .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px; }
+        .card { padding: 15px; border-radius: 6px; text-align: center; color: white; font-weight: bold; }
+        .UP { background-color: #27ae60; }
+        .DOWN { background-color: #c0392b; }
+        .WARN { background-color: #f39c12; }
+
+        .btn { background-color: #3498db; color: white; padding: 12px 24px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .btn:hover { background-color: #2980b9; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #ecf0f1; }
+        
+        .flash { padding: 10px; background-color: #d4edda; color: #155724; border-radius: 4px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>IntegraHub - Control Center</h1>
+
+        <!-- System Status -->
+        <h2>System Health</h2>
+        <div class="status-grid">
+            {% for service in health %}
+            <div class="card {{ service.status }}">
+                {{ service.service_name }}<br>
+                <small>{{ service.status }}</small>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Actions -->
+        <h2>Simulation</h2>
+        {% if message %}
+        <div class="flash">{{ message }}</div>
+        {% endif %}
+        
+        <form action="/create-demo-order" method="post">
+            <p>Genera un pedido de prueba que disparará todo el flujo Order-to-Cash (RabbitMQ).</p>
+            <button type="submit" class="btn">🚀 Crear Pedido Demo</button>
+        </form>
+
+        <!-- Monitoring -->
+        <h2>Live Order Tracking</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Order ID</th>
+                    <th>Correlation ID</th>
+                    <th>Status</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr>
+                    <td>{{ order.order_id }}</td>
+                    <td><code>{{ order.correlation_id }}</code></td>
+                    <td>{{ order.status }}</td>
+                    <td>${{ order.total }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

@@ -1,0 +1,180 @@
+version: '3.8'
+
+services:
+  # --- Infrastructure Services ---
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: integrahub-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    networks:
+      - integrahub-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: integrahub-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-integrahub_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
+    networks:
+      - integrahub-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-integrahub_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- Application Microservices ---
+
+  order-service:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: order_service
+    container_name: integrahub-order-service
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - DB_HOST=postgres
+      - DB_NAME=${DB_NAME:-integrahub_db}
+      - ORDER_SERVICE_PORT=${ORDER_SERVICE_PORT:-8001}
+    networks:
+      - integrahub-network
+    ports:
+      - "${ORDER_SERVICE_PORT:-8001}:8000"
+
+  inventory-service:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: inventory_service
+    container_name: integrahub-inventory-service
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - DB_HOST=postgres
+      - DB_NAME=${DB_NAME:-integrahub_db}
+    networks:
+      - integrahub-network
+
+  payment-service:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: payment_service
+    container_name: integrahub-payment-service
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+    networks:
+      - integrahub-network
+
+  notification-service:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: notification_service
+    container_name: integrahub-notification-service
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+    networks:
+      - integrahub-network
+
+  legacy-ingestion-service:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: legacy_ingestion_service
+    container_name: integrahub-ingestion-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DB_HOST=postgres
+      - DB_NAME=${DB_NAME:-integrahub_db}
+    networks:
+      - integrahub-network
+    volumes:
+      - ./data/inbox:/app/data
+
+  analytics-service:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: analytics_service
+    container_name: integrahub-analytics-service
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - DB_HOST=postgres
+      - DB_NAME=${DB_NAME_ANALYTICS:-integrahub_analytics}
+    networks:
+      - integrahub-network
+    ports:
+      - "8004:8004"
+
+  demo-portal:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: demo_portal
+    container_name: integrahub-demo-portal
+    depends_on:
+      order-service:
+        condition: service_started
+    environment:
+      - ORDER_SERVICE_URL=http://order-service:8000
+      - INVENTORY_SERVICE_URL=http://inventory-service:8000
+      - PAYMENT_SERVICE_URL=http://payment-service:8000
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8000
+    networks:
+      - integrahub-network
+    ports:
+      - "8088:8080"
+
+networks:
+  integrahub-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

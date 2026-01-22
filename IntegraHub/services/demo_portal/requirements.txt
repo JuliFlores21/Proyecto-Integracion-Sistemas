@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+jinja2
+httpx
+python-multipart
+# Dependencias compartidas
+pika
+pybreaker
+tenacity
+PyJWT
+sqlalchemy
+psycopg2-binary
