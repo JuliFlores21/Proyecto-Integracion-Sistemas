@@ -1,4 +1,5 @@
 """Puertos (interfaces) de dominio - Inventory Service"""
+
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any
 from .models import Product
@@ -6,7 +7,7 @@ from .models import Product
 
 class InventoryRepository(ABC):
     """Puerto de salida para persistencia de inventario"""
-    
+
     @abstractmethod
     def get_product(self, product_id: str) -> Optional[Product]:
         """Obtiene un producto por su ID"""
@@ -30,7 +31,7 @@ class InventoryRepository(ABC):
 
 class EventPublisher(ABC):
     """Puerto de salida para publicación de eventos"""
-    
+
     @abstractmethod
     def publish(self, topic: str, event_type: str, data: Dict[str, Any]) -> None:
         """Publica un evento en el bus de mensajes"""

@@ -1,4 +1,5 @@
 """Puertos (interfaces) de dominio - Arquitectura Hexagonal"""
+
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any
 from .models import Order
@@ -6,7 +7,7 @@ from .models import Order
 
 class OrderRepository(ABC):
     """Puerto de salida para persistencia de órdenes"""
-    
+
     @abstractmethod
     def save(self, order: Order) -> Order:
         """Persiste una orden en el repositorio"""
@@ -16,12 +17,12 @@ class OrderRepository(ABC):
     def get_by_id(self, order_id: str) -> Optional[Order]:
         """Obtiene una orden por su ID"""
         pass
-    
+
     @abstractmethod
     def exists_idempotency_key(self, key: str) -> bool:
         """Verifica si existe una clave de idempotencia"""
         pass
-    
+
     @abstractmethod
     def save_idempotency_key(self, key: str, order_id: str) -> None:
         """Guarda una clave de idempotencia asociada a una orden"""
@@ -30,7 +31,7 @@ class OrderRepository(ABC):
 
 class EventPublisher(ABC):
     """Puerto de salida para publicación de eventos de dominio"""
-    
+
     @abstractmethod
     def publish(self, topic: str, event_type: str, data: Dict[str, Any]) -> None:
         """Publica un evento en el bus de mensajes"""

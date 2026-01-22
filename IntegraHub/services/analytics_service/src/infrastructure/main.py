@@ -1,4 +1,5 @@
 """Analytics Service - Infrastructure Layer Entry Point"""
+
 import logging
 import sys
 
@@ -12,8 +13,7 @@ from .http.api import create_app
 
 # Configuración de logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -21,19 +21,17 @@ logger = logging.getLogger(__name__)
 def main():
     """Punto de entrada del Analytics Service"""
     logger.info("Iniciando Analytics Service...")
-    
+
     # Obtener configuración centralizada
     config = get_service_config(
-        "analytics_service",
-        default_port=8004,
-        db_name="integrahub_analytics"
+        "analytics_service", default_port=8004, db_name="integrahub_analytics"
     )
-    
+
     try:
         # 1. Inicializar repositorio
         repo = PostgresMetricsRepository(config.database.url)
         logger.info("Repositorio PostgreSQL inicializado")
-        
+
         # 2. Inicializar casos de uso
         process_use_case = ProcessEventUseCase(repo)
         get_metrics_use_case = GetMetricsUseCase(repo)
@@ -41,8 +39,7 @@ def main():
 
         # 3. Iniciar procesador de stream (hilo en segundo plano)
         stream_processor = AnalyticsStreamProcessor(
-            config.rabbitmq.url,
-            process_use_case
+            config.rabbitmq.url, process_use_case
         )
         stream_processor.start()
         logger.info("Procesador de stream iniciado")
@@ -51,7 +48,7 @@ def main():
         app = create_app(get_metrics_use_case)
         logger.info(f"Iniciando API HTTP en puerto {config.service_port}")
         uvicorn.run(app, host="0.0.0.0", port=config.service_port)
-        
+
     except KeyboardInterrupt:
         logger.info("Servicio detenido por el usuario")
         sys.exit(0)

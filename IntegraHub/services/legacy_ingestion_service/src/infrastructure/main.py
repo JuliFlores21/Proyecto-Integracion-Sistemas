@@ -1,4 +1,5 @@
 """Legacy Ingestion Service - Infrastructure Layer Entry Point"""
+
 import logging
 import os
 import sys
@@ -10,8 +11,7 @@ from ..application.services import IngestFileUseCase
 
 # Configuración de logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -22,16 +22,16 @@ DEFAULT_INBOX_PATH = "/app/data"
 def main():
     """Punto de entrada del Legacy Ingestion Service"""
     logger.info("Iniciando Legacy Ingestion Service...")
-    
+
     # Obtener configuración centralizada
     config = get_service_config("legacy_ingestion_service")
     inbox_path = os.getenv("DATA_INBOX_PATH", DEFAULT_INBOX_PATH)
-    
+
     try:
         # 1. Inicializar repositorio
         repository = PostgresInventoryRepository(config.database.url)
         logger.info("Repositorio PostgreSQL inicializado")
-        
+
         # 2. Inicializar caso de uso
         use_case = IngestFileUseCase(repository)
         logger.info("Caso de uso inicializado")
@@ -45,7 +45,7 @@ def main():
         monitor = FileMonitorAdapter(inbox_path, use_case)
         logger.info(f"Iniciando monitoreo de directorio: {inbox_path}")
         monitor.start()
-        
+
     except KeyboardInterrupt:
         logger.info("Servicio detenido por el usuario")
         sys.exit(0)

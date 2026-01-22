@@ -1,4 +1,5 @@
 """Adaptador de persistencia PostgreSQL para Inventory Service"""
+
 import logging
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -17,16 +18,18 @@ Base = declarative_base()
 
 class ProductModel(Base):
     """Modelo SQLAlchemy para productos"""
+
     __tablename__ = "products"
-    
+
     product_id = Column(String, primary_key=True)
     stock = Column(Integer, nullable=False, default=0)
 
 
 class ProcessedOrderModel(Base):
     """Modelo SQLAlchemy para órdenes procesadas (idempotencia)"""
+
     __tablename__ = "processed_orders_inventory"
-    
+
     order_id = Column(String, primary_key=True)
     status = Column(String, nullable=False)
     processed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -34,14 +37,14 @@ class ProcessedOrderModel(Base):
 
 class PostgresInventoryRepository(InventoryRepository):
     """Implementación del repositorio de inventario con PostgreSQL"""
-    
+
     def __init__(self, db_url: str):
         self.engine = create_engine(
             db_url,
             poolclass=QueuePool,
             pool_size=5,
             max_overflow=10,
-            pool_pre_ping=True
+            pool_pre_ping=True,
         )
         Base.metadata.create_all(self.engine)
         self._session_factory = sessionmaker(bind=self.engine, expire_on_commit=False)
@@ -70,7 +73,7 @@ class PostgresInventoryRepository(InventoryRepository):
                     ProductModel(product_id="prod_1", stock=100),
                     ProductModel(product_id="prod_2", stock=50),
                     ProductModel(product_id="prod-001", stock=100),
-                    ProductModel(product_id="prod-002", stock=50)
+                    ProductModel(product_id="prod-002", stock=50),
                 ]
                 session.add_all(products)
                 logger.info("Datos de prueba inicializados")
@@ -86,7 +89,9 @@ class PostgresInventoryRepository(InventoryRepository):
     def update_stock(self, product_id: str, quantity: int) -> None:
         """Actualiza el stock de un producto"""
         with self._get_session() as session:
-            product = session.query(ProductModel).filter_by(product_id=product_id).first()
+            product = (
+                session.query(ProductModel).filter_by(product_id=product_id).first()
+            )
             if product:
                 product.stock += quantity
                 logger.debug(f"Stock actualizado: {product_id} -> {product.stock}")
@@ -96,7 +101,10 @@ class PostgresInventoryRepository(InventoryRepository):
     def is_order_processed(self, order_id: str) -> bool:
         """Verifica si una orden ya fue procesada"""
         with self._get_session() as session:
-            return session.query(ProcessedOrderModel).filter_by(order_id=order_id).first() is not None
+            return (
+                session.query(ProcessedOrderModel).filter_by(order_id=order_id).first()
+                is not None
+            )
 
     def mark_order_processed(self, order_id: str, status: str) -> None:
         """Marca una orden como procesada"""
