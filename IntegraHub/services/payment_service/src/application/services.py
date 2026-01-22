@@ -1,38 +1,56 @@
-from ..domain.ports import PaymentGateway, EventPublisher
-from ..domain.models import PaymentTransaction
+"""Casos de uso de la capa de aplicación - Payment Service"""
+import logging
+
 import pybreaker
 
-class ProcessPaymentUseCase:
-    def __init__(self, gateway: PaymentGateway, publisher: EventPublisher):
-        self.gateway = gateway
-        self.publisher = publisher
+from ..domain.ports import PaymentGateway, EventPublisher
+from ..domain.models import PaymentTransaction
 
-    def execute(self, order_id: str, amount: float):
-        print(f"Processing payment for Order: {order_id}, Amount: {amount}")
+logger = logging.getLogger(__name__)
+
+
+class ProcessPaymentUseCase:
+    """Caso de uso para procesar pagos"""
+    
+    def __init__(self, gateway: PaymentGateway, publisher: EventPublisher):
+        self._gateway = gateway
+        self._publisher = publisher
+
+    def execute(self, order_id: str, amount: float) -> None:
+        """
+        Ejecuta el procesamiento de pago para una orden.
+        
+        Args:
+            order_id: ID de la orden
+            amount: Monto a cobrar
+            
+        Raises:
+            pybreaker.CircuitBreakerError: Si el circuit breaker está abierto
+        """
+        logger.info(f"Procesando pago para orden: {order_id}, monto: {amount}")
         
         try:
-            # 1. Attempt Charge (Protected by Circuit Breaker inside the adapter)
-            transaction_id = self.gateway.charge(order_id, amount)
+            # 1. Intentar cobro (protegido por Circuit Breaker en el adaptador)
+            transaction_id = self._gateway.charge(order_id, amount)
             
-            # 2. Success Case
-            print(f"Payment successful: {transaction_id}")
-            self.publisher.publish("payments", "OrderConfirmed", {
+            # 2. Caso de éxito
+            logger.info(f"Pago exitoso: {transaction_id}")
+            self._publisher.publish("payments", "OrderConfirmed", {
                 "order_id": order_id,
                 "status": "CONFIRMED",
-                "transaction_id": transaction_id
+                "transaction_id": transaction_id,
+                "total_amount": amount
             })
 
         except pybreaker.CircuitBreakerError:
-            # Circuit is OPEN - Fail fast
-            print(f"Circuit Breaker is OPEN. Payment failed for {order_id}")
-            # Re-raise to let the consumer handle DLQ routing for transient/system issues
-            raise 
+            # Circuit Breaker abierto - fallo rápido
+            logger.warning(f"Circuit Breaker abierto. Pago fallido para {order_id}")
+            raise
 
         except Exception as e:
-            # Logic/Gateway Error (e.g., Insufficient Funds, Declined)
-            # We treat this as a definitive business failure.
-            print(f"Payment failed: {e}")
-            self.publisher.publish("payments", "OrderRejected", {
+            # Error de lógica/Gateway (ej: Fondos insuficientes)
+            logger.error(f"Pago fallido: {e}")
+            self._publisher.publish("payments", "OrderRejected", {
                 "order_id": order_id,
                 "reason": f"Payment Failed: {str(e)}"
             })

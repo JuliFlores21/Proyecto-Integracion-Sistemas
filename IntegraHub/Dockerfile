@@ -1,23 +1,39 @@
-FROM python:3.9-slim
+# Dockerfile optimizado para microservicios con arquitectura hexagonal
+FROM python:3.11-slim as base
+
+# Etapa base con dependencias del sistema
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --upgrade pip
 
 WORKDIR /app
 
-# Arguments
+# Argumentos de build
 ARG SERVICE_NAME
+ENV SERVICE_NAME=${SERVICE_NAME}
 
-# 1. Shared Environment Setup
-ENV PYTHONPATH=/app
+# Configuración de Python
+ENV PYTHONPATH=/app \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# 2. Install dependencies
-# Copy specific service requirements
+# Copiar y instalar dependencias
 COPY services/${SERVICE_NAME}/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 3. Copy Code
-# Copy shared library
+# Copiar código compartido y del servicio
 COPY shared/ ./shared/
-# Copy service code -> mapped to /app/src
 COPY services/${SERVICE_NAME}/src/ ./src/
 
-# Default Command (Can be overridden in compose)
+# Usuario no-root para seguridad
+RUN adduser --disabled-password --gecos '' appuser && \
+    chown -R appuser:appuser /app
+USER appuser
+
+# Health check genérico
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)"
+
+# Comando por defecto
 CMD ["python", "-m", "src.infrastructure.main"]

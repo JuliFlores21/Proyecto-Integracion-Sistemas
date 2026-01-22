@@ -10,8 +10,8 @@ services:
       - "5672:5672"   # AMQP
       - "15672:15672" # Management UI
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-user}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-password}
     networks:
       - integrahub-network
     healthcheck:
@@ -19,6 +19,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
   postgres:
     image: postgres:15-alpine
@@ -26,19 +27,21 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
-      POSTGRES_DB: ${DB_NAME:-integrahub_db}
+      POSTGRES_USER: ${DB_USER:-user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_NAME_TRANSACTIONAL:-integrahub_db}
+      DB_NAME_ANALYTICS: ${DB_NAME_ANALYTICS:-integrahub_analytics}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
     networks:
       - integrahub-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-integrahub_db}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-user} -d ${DB_NAME_TRANSACTIONAL:-integrahub_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
   # --- Application Microservices ---
 
@@ -56,13 +59,18 @@ services:
         condition: service_healthy
     environment:
       - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:-user}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-password}
       - DB_HOST=postgres
-      - DB_NAME=${DB_NAME:-integrahub_db}
-      - ORDER_SERVICE_PORT=${ORDER_SERVICE_PORT:-8001}
+      - DB_USER=${DB_USER:-user}
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - DB_NAME=${DB_NAME_TRANSACTIONAL:-integrahub_db}
+      - JWT_SECRET=${JWT_SECRET:-supersecretkey}
     networks:
       - integrahub-network
     ports:
       - "${ORDER_SERVICE_PORT:-8001}:8000"
+    restart: unless-stopped
 
   inventory-service:
     build: 
@@ -78,10 +86,15 @@ services:
         condition: service_healthy
     environment:
       - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:-user}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-password}
       - DB_HOST=postgres
-      - DB_NAME=${DB_NAME:-integrahub_db}
+      - DB_USER=${DB_USER:-user}
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - DB_NAME=${DB_NAME_TRANSACTIONAL:-integrahub_db}
     networks:
       - integrahub-network
+    restart: unless-stopped
 
   payment-service:
     build: 
@@ -95,8 +108,11 @@ services:
         condition: service_healthy
     environment:
       - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:-user}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-password}
     networks:
       - integrahub-network
+    restart: unless-stopped
 
   notification-service:
     build: 
@@ -110,8 +126,11 @@ services:
         condition: service_healthy
     environment:
       - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:-user}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-password}
     networks:
       - integrahub-network
+    restart: unless-stopped
 
   legacy-ingestion-service:
     build: 
@@ -125,11 +144,15 @@ services:
         condition: service_healthy
     environment:
       - DB_HOST=postgres
-      - DB_NAME=${DB_NAME:-integrahub_db}
+      - DB_USER=${DB_USER:-user}
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - DB_NAME=${DB_NAME_TRANSACTIONAL:-integrahub_db}
+      - DATA_INBOX_PATH=/app/data
     networks:
       - integrahub-network
     volumes:
       - ./data/inbox:/app/data
+    restart: unless-stopped
 
   analytics-service:
     build: 
@@ -145,12 +168,17 @@ services:
         condition: service_healthy
     environment:
       - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:-user}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-password}
       - DB_HOST=postgres
+      - DB_USER=${DB_USER:-user}
+      - DB_PASSWORD=${DB_PASSWORD:-password}
       - DB_NAME=${DB_NAME_ANALYTICS:-integrahub_analytics}
     networks:
       - integrahub-network
     ports:
-      - "8004:8004"
+      - "${ANALYTICS_SERVICE_PORT:-8004}:8004"
+    restart: unless-stopped
 
   demo-portal:
     build: 
@@ -167,10 +195,12 @@ services:
       - INVENTORY_SERVICE_URL=http://inventory-service:8000
       - PAYMENT_SERVICE_URL=http://payment-service:8000
       - NOTIFICATION_SERVICE_URL=http://notification-service:8000
+      - JWT_SECRET=${JWT_SECRET:-supersecretkey}
     networks:
       - integrahub-network
     ports:
-      - "8088:8080"
+      - "${DEMO_PORTAL_PORT:-8088}:8080"
+    restart: unless-stopped
 
 networks:
   integrahub-network:

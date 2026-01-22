@@ -1,68 +1,82 @@
-from typing import List, Dict
+"""Casos de uso de la capa de aplicación - Inventory Service"""
+import logging
+from typing import List, Dict, Any
+
 from ..domain.ports import InventoryRepository, EventPublisher
 
-class ReserveInventoryUseCase:
-    def __init__(self, repository: InventoryRepository, publisher: EventPublisher):
-        self.repository = repository
-        self.publisher = publisher
+logger = logging.getLogger(__name__)
 
-    def execute(self, order_id: str, items: List[Dict]):
-        # 1. Idempotency Check
-        if self.repository.is_order_processed(order_id):
-            print(f"Order {order_id} already processed. Skipping.")
+
+class ReserveInventoryUseCase:
+    """Caso de uso para reservar inventario de una orden"""
+    
+    def __init__(self, repository: InventoryRepository, publisher: EventPublisher):
+        self._repository = repository
+        self._publisher = publisher
+
+    def execute(self, order_id: str, items: List[Dict[str, Any]]) -> None:
+        """
+        Ejecuta la reserva de inventario para una orden.
+        
+        Args:
+            order_id: ID de la orden
+            items: Lista de items con product_id y quantity
+        """
+        logger.info(f"Procesando reserva de inventario para orden: {order_id}")
+        
+        # 1. Verificación de idempotencia
+        if self._repository.is_order_processed(order_id):
+            logger.info(f"Orden {order_id} ya procesada. Omitiendo.")
             return
 
-        # 2. Check Stock availability
-        can_fulfill = True
-        failed_reason = ""
+        # 2. Verificar disponibilidad de stock
+        can_fulfill, failed_reason = self._check_stock_availability(items)
 
-        # Using a simple check first (locking strategy would depend on specific DB isolation levels)
-        # For simplicity in this demo: Check all, then Update all.
-        # In production: Use row locking or atomic decrements.
-        
+        # 3. Ejecutar transacción
+        if can_fulfill:
+            self._reserve_items(order_id, items)
+        else:
+            self._reject_order(order_id, failed_reason)
+
+    def _check_stock_availability(self, items: List[Dict[str, Any]]) -> tuple[bool, str]:
+        """Verifica si hay stock suficiente para todos los items"""
         for item in items:
             product_id = item['product_id']
             qty = item['quantity']
-            product = self.repository.get_product(product_id)
+            product = self._repository.get_product(product_id)
             
             if not product:
-                can_fulfill = False
-                failed_reason = f"Product {product_id} not found"
-                break
+                return False, f"Producto {product_id} no encontrado"
             
-            if product.stock < qty:
-                can_fulfill = False
-                failed_reason = f"Insufficient stock for product {product_id}"
-                break
+            if not product.has_sufficient_stock(qty):
+                return False, f"Stock insuficiente para producto {product_id}"
+        
+        return True, ""
 
-        # 3. Transaction Execution
-        if can_fulfill:
-            try:
-                # Deduct stock
-                for item in items:
-                    self.repository.update_stock(item['product_id'], -item['quantity'])
-                
-                # Mark processed
-                self.repository.mark_order_processed(order_id, "RESERVED")
-                
-                # Publish Success
-                self.publisher.publish("inventory", "InventoryReserved", {"order_id": order_id})
-                print(f"Inventory reserved for order {order_id}")
-                
-            except Exception as e:
-                # Rollback/Fail handling should be in repo adapter usually, 
-                # strictly here we might catch DB errors.
-                # If DB fails here, we re-raise to let the consumer retry.
-                raise e
-        else:
-            # Mark processed as failed so we don't retry logic unnecessarily, 
-            # Or maybe we DO want to retry later? 
-            # Requirement says: "Si no [hay stock], publicar OrderRejected".
-            # Usually stock issues don't resolve quickly, so we reject.
-            self.repository.mark_order_processed(order_id, "REJECTED")
+    def _reserve_items(self, order_id: str, items: List[Dict[str, Any]]) -> None:
+        """Reserva los items descontando del stock"""
+        try:
+            # Descontar stock de cada item
+            for item in items:
+                self._repository.update_stock(item['product_id'], -item['quantity'])
             
-            self.publisher.publish("inventory", "OrderRejected", {
-                "order_id": order_id, 
-                "reason": failed_reason
-            })
-            print(f"Order {order_id} rejected: {failed_reason}")
+            # Marcar orden como procesada
+            self._repository.mark_order_processed(order_id, "RESERVED")
+            
+            # Publicar evento de éxito
+            self._publisher.publish("inventory", "InventoryReserved", {"order_id": order_id})
+            logger.info(f"Inventario reservado para orden {order_id}")
+            
+        except Exception as e:
+            logger.error(f"Error al reservar inventario: {e}")
+            raise
+
+    def _reject_order(self, order_id: str, reason: str) -> None:
+        """Rechaza la orden por falta de stock"""
+        self._repository.mark_order_processed(order_id, "REJECTED")
+        
+        self._publisher.publish("inventory", "OrderRejected", {
+            "order_id": order_id, 
+            "reason": reason
+        })
+        logger.warning(f"Orden {order_id} rechazada: {reason}")

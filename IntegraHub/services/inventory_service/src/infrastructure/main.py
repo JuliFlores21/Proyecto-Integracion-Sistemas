@@ -1,31 +1,49 @@
-import os
-import time
+"""Inventory Service - Infrastructure Layer Entry Point"""
+import logging
+import sys
+
+from shared.infrastructure.config import get_service_config
 from .adapters.postgres_repository import PostgresInventoryRepository
 from .adapters.rabbitmq_consumer import RabbitMQConsumer
 
-def main():
-    print("Starting Inventory Service...")
-    
-    # Config
-    DB_HOST = os.getenv("DB_HOST", "localhost")
-    RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
-    DATABASE_URL = f"postgresql://user:password@{DB_HOST}:5432/integrahub_db"
-    AMQP_URL = f"amqp://user:password@{RABBITMQ_HOST}:5672/%2f"
+# Configuración de logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-    # Infrastructure Setup
-    # Wait for DB to be ready (Primitive wait, in prod use healthchecks/wait-for-it)
-    time.sleep(5) 
+
+def main():
+    """Punto de entrada del Inventory Service"""
+    logger.info("Iniciando Inventory Service...")
     
-    repository = PostgresInventoryRepository(DATABASE_URL)
-    
-    consumer = RabbitMQConsumer(amqp_url=AMQP_URL, repository=repository)
+    # Obtener configuración centralizada
+    config = get_service_config("inventory_service")
     
     try:
+        # Inicializar repositorio
+        repository = PostgresInventoryRepository(config.database.url)
+        logger.info("Repositorio PostgreSQL inicializado")
+        
+        # Inicializar consumidor de mensajes
+        consumer = RabbitMQConsumer(
+            amqp_url=config.rabbitmq.url,
+            repository=repository
+        )
+        logger.info("Consumidor RabbitMQ inicializado")
+        
+        # Iniciar consumo de mensajes
+        logger.info("Iniciando consumo de mensajes...")
         consumer.start_consuming()
+        
     except KeyboardInterrupt:
-        print("Stopping...")
+        logger.info("Servicio detenido por el usuario")
+        sys.exit(0)
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error crítico en Inventory Service: {e}", exc_info=True)
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

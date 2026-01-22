@@ -1,11 +1,18 @@
+"""Puertos (interfaces) de dominio - Notification Service"""
 from abc import ABC, abstractmethod
+from typing import Optional
+
 
 class NotificationChannel(ABC):
+    """Puerto de salida para canales de notificación"""
+    
     @abstractmethod
-    def send(self, message: str, recipient: str = None):
+    def send(self, message: str, recipient: Optional[str] = None) -> None:
         """
-        Sends a message through the channel.
-        :param message: The body of the notification.
-        :param recipient: Optional target (email address, slack channel ID, etc.)
+        Envía un mensaje a través del canal.
+        
+        Args:
+            message: Cuerpo de la notificación
+            recipient: Destinatario opcional (email, canal de Slack, etc.)
         """
         pass
