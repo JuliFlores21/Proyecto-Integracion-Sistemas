@@ -1,3 +1,7 @@
+# Infrastructure Adapter: Postgres Repository (SQLAlchemy)
+# Implementa el Port OrderRepository usando una base relacional (PostgreSQL).
+# Esta capa sí puede depender de librerías externas (SQLAlchemy).
+
 from sqlalchemy import create_engine, Column, String, Float, Integer, ForeignKey, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -33,11 +37,13 @@ class IdempotencyModel(Base):
 
 class PostgresOrderRepository(OrderRepository):
     def __init__(self, db_url: str):
+        # Inicializa engine + crea tablas si no existen (demo-friendly).
         self.engine = create_engine(db_url)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
 
     def save(self, order: Order) -> Order:
+        # Mapea Domain -> ORM (Order/OrderItem) y persiste.
         session = self.Session()
         try:
             db_order = OrderModel(
@@ -80,6 +86,7 @@ class PostgresOrderRepository(OrderRepository):
             session.close()
 
     def _map(self, db_order):
+        # Mapea ORM -> Domain (manteniendo independencia del dominio).
         order = Order(
             order_id=db_order.order_id,
             customer_id=db_order.customer_id,
@@ -89,8 +96,10 @@ class PostgresOrderRepository(OrderRepository):
         )
         order.total_amount = db_order.total_amount
         return order
-    #Verify idempotency key existence
+    # Verify idempotency key existence
     def exists_idempotency_key(self, key: str) -> bool:
+        # Parte del patrón de idempotencia a nivel API:
+        # evita procesar dos veces un POST /orders repetido.
         session = self.Session()
         try:
             return session.query(IdempotencyModel).filter_by(key=key).first() is not None
@@ -107,6 +116,7 @@ class PostgresOrderRepository(OrderRepository):
             session.close()
     # Update order status
     def update_status(self, order_id: str, status: str):
+        # Operación usada por el consumidor de eventos de estado (OrderConfirmed/OrderRejected).
         session = self.Session()
         try:
             order = session.query(OrderModel).filter_by(order_id=order_id).first()
